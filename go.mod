@@ -1,4 +1,4 @@
-module github.com/literalog/wise
+module github.com/literalog/go-wise
 
 go 1.21.5
 
