@@ -1,6 +1,8 @@
 package mongodb
 
-import "github.com/literalog/go-wise/wise/filters"
+import (
+	"github.com/literalog/go-wise/wise/internal/filters"
+)
 
 type RepositoryOptions func(*repositoryOptions)
 
@@ -16,7 +18,6 @@ func NewRepositoryOptions(fnopts ...RepositoryOptions) *repositoryOptions {
 	for _, fn := range fnopts {
 		fn(opts)
 	}
-
 	return opts
 }
 
