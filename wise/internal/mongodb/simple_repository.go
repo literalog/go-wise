@@ -60,6 +60,23 @@ func (r *simpleRepository[M]) Search(ctx context.Context, filters map[string][]a
 	return r.search(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
+func (r *simpleRepository[M]) Aggregate(ctx context.Context, pipeline map[string][]any) ([]M, error) {
+	mm := make([]M, 0)
+
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	err = cur.All(ctx, &mm)
+	if err != nil {
+		return nil, err
+	}
+
+	return mm, nil
+}
+
 func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[string][]any) (int64, error) {
 	opts := options.Count()
 

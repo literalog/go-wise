@@ -102,6 +102,26 @@ func (r *repository[M, D]) Search(ctx context.Context, filters map[string][]any,
 	return mm, nil
 }
 
+func (r *repository[M, D]) Aggregate(ctx context.Context, pipeline map[string][]any) ([]M, error) {
+	dd, err := r.Repository.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	mm := make([]M, len(dd))
+
+	for i, d := range dd {
+		m, err := r.serializer.Deserialize(d)
+		if err != nil {
+			return nil, err
+		}
+
+		mm[i] = m
+	}
+
+	return mm, nil
+}
+
 func (r *repository[M, D]) Upsert(ctx context.Context, id string, m M) error {
 	d, err := r.serializer.Serialize(m)
 	if err != nil {
