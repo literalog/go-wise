@@ -8,7 +8,7 @@ type Repository[M any] interface {
 	FindAll(ctx context.Context) ([]M, error)
 	Search(ctx context.Context, filters map[string][]any, opts ...SearchOptions) ([]M, error)
 
-	Aggregate(ctx context.Context, pipeline map[string][]any) ([]M, error)
+	Aggregate(ctx context.Context, pipeline []any) ([]M, error)
 
 	CountDocuments(ctx context.Context, filters map[string][]any) (int64, error)
 

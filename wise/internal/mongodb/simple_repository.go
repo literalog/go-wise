@@ -60,7 +60,7 @@ func (r *simpleRepository[M]) Search(ctx context.Context, filters map[string][]a
 	return r.search(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
-func (r *simpleRepository[M]) Aggregate(ctx context.Context, pipeline map[string][]any) ([]M, error) {
+func (r *simpleRepository[M]) Aggregate(ctx context.Context, pipeline []any) ([]M, error) {
 	mm := make([]M, 0)
 
 	cur, err := r.collection.Aggregate(ctx, pipeline)

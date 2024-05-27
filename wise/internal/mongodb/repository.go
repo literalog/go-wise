@@ -102,7 +102,7 @@ func (r *repository[M, D]) Search(ctx context.Context, filters map[string][]any,
 	return mm, nil
 }
 
-func (r *repository[M, D]) Aggregate(ctx context.Context, pipeline map[string][]any) ([]M, error) {
+func (r *repository[M, D]) Aggregate(ctx context.Context, pipeline []any) ([]M, error) {
 	dd, err := r.Repository.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
