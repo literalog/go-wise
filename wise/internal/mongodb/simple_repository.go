@@ -30,15 +30,13 @@ func NewSimpleRepository[M any](coll *mongo.Collection, opts ...RepositoryOption
 	return repo, nil
 }
 
-func (r *simpleRepository[M]) FindOne(ctx context.Context, id string) (M, error) {
-	m := new(M)
-
-	err := r.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&m)
+func (r *simpleRepository[M]) FindOne(ctx context.Context, filters map[string][]any) (M, error) {
+	bson, err := r.indexedFields.toBson(filters)
 	if err != nil {
 		return *new(M), err
 	}
 
-	return *m, nil
+	return r.searchOne(ctx, bson)
 }
 
 func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any, opts ...SearchOptions) ([]M, error) {
@@ -49,7 +47,18 @@ func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any
 
 	opt := NewSearchOptions(opts...)
 
-	return r.search(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
+	return r.searchMany(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
+}
+
+func (r *simpleRepository[M]) FindById(ctx context.Context, id string) (M, error) {
+	m := new(M)
+
+	err := r.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&m)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return *m, nil
 }
 
 func (r *simpleRepository[M]) Upsert(ctx context.Context, id string, m M) error {
@@ -61,13 +70,18 @@ func (r *simpleRepository[M]) Upsert(ctx context.Context, id string, m M) error 
 	return err
 }
 
-func (r *simpleRepository[M]) DeleteOne(ctx context.Context, id string) (M, error) {
-	m, err := r.FindOne(ctx, id)
+func (r *simpleRepository[M]) DeleteOne(ctx context.Context, filters map[string][]any) (M, error) {
+	bson, err := r.indexedFields.toBson(filters)
 	if err != nil {
 		return *new(M), err
 	}
 
-	_, err = r.coll.DeleteOne(ctx, bson.M{"_id": id})
+	m, err := r.searchOne(ctx, bson)
+	if err != nil {
+		return *new(M), err
+	}
+
+	_, err = r.coll.DeleteOne(ctx, bson)
 	if err != nil {
 		return *new(M), err
 	}
@@ -80,12 +94,27 @@ func (r *simpleRepository[M]) DeleteMany(ctx context.Context, filters map[string
 	if err != nil {
 		return err
 	}
+
 	_, err = r.coll.DeleteMany(ctx, mongoFilters)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (r *simpleRepository[M]) DeleteById(ctx context.Context, id string) (M, error) {
+	m, err := r.FindById(ctx, id)
+	if err != nil {
+		return *new(M), err
+	}
+
+	_, err = r.coll.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return *new(M), err
+	}
+
+	return m, nil
 }
 
 func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[string][]any) (int64, error) {
@@ -99,7 +128,7 @@ func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[st
 	return r.coll.CountDocuments(ctx, bson, opts)
 }
 
-func (r *simpleRepository[M]) search(ctx context.Context, filters bson.M, opts ...*options.FindOptions) ([]M, error) {
+func (r *simpleRepository[M]) searchMany(ctx context.Context, filters bson.M, opts ...*options.FindOptions) ([]M, error) {
 	mm := make([]M, 0)
 
 	cur, err := r.coll.Find(ctx, filters, opts...)
@@ -114,4 +143,15 @@ func (r *simpleRepository[M]) search(ctx context.Context, filters bson.M, opts .
 	}
 
 	return mm, nil
+}
+
+func (r *simpleRepository[M]) searchOne(ctx context.Context, filters bson.M, opts ...*options.FindOneOptions) (M, error) {
+	m := new(M)
+
+	err := r.coll.FindOne(ctx, filters, opts...).Decode(&m)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return *m, nil
 }

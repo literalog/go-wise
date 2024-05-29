@@ -33,8 +33,8 @@ func NewRepository[M, D any](coll *mongo.Collection, ser Serializer[M, D]) (Repo
 	return repo, nil
 }
 
-func (r *repository[M, D]) FindOne(ctx context.Context, id string) (M, error) {
-	d, err := r.Repository.FindOne(ctx, id)
+func (r *repository[M, D]) FindOne(ctx context.Context, filters map[string][]any) (M, error) {
+	d, err := r.Repository.FindOne(ctx, filters)
 	if err != nil {
 		return *new(M), err
 	}
@@ -62,6 +62,15 @@ func (r *repository[M, D]) Find(ctx context.Context, filters map[string][]any, o
 	return mm, nil
 }
 
+func (r *repository[M, D]) FindById(ctx context.Context, id string) (M, error) {
+	d, err := r.Repository.FindById(ctx, id)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return r.serializer.Deserialize(d)
+}
+
 func (r *repository[M, D]) Upsert(ctx context.Context, id string, m M) error {
 	d, err := r.serializer.Serialize(m)
 	if err != nil {
@@ -71,8 +80,17 @@ func (r *repository[M, D]) Upsert(ctx context.Context, id string, m M) error {
 	return r.Repository.Upsert(ctx, id, d)
 }
 
-func (r *repository[M, D]) DeleteOne(ctx context.Context, id string) (M, error) {
-	d, err := r.Repository.DeleteOne(ctx, id)
+func (r *repository[M, D]) DeleteOne(ctx context.Context, filters map[string][]any) (M, error) {
+	d, err := r.Repository.DeleteOne(ctx, filters)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return r.serializer.Deserialize(d)
+}
+
+func (r *repository[M, D]) DeleteById(ctx context.Context, id string) (M, error) {
+	d, err := r.Repository.DeleteById(ctx, id)
 	if err != nil {
 		return *new(M), err
 	}
