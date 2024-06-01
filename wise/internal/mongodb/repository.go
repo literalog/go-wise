@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type repository[M, D any] struct {
@@ -62,13 +63,52 @@ func (r *repository[M, D]) Find(ctx context.Context, filters map[string][]any, o
 	return mm, nil
 }
 
-func (r *repository[M, D]) Upsert(ctx context.Context, id string, m M) error {
+func (r *repository[M, D]) InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error {
 	d, err := r.serializer.Serialize(m)
 	if err != nil {
 		return err
 	}
 
-	return r.Repository.Upsert(ctx, id, d)
+	return r.Repository.InsertOne(ctx, d, opts...)
+}
+
+func (r *repository[M, D]) InsertMany(ctx context.Context, mm []M, opts ...*options.InsertManyOptions) error {
+	dd := make([]D, len(mm))
+
+	for i, m := range mm {
+		d, err := r.serializer.Serialize(m)
+		if err != nil {
+			return err
+		}
+
+		dd[i] = d
+	}
+
+	return r.Repository.InsertMany(ctx, dd, opts...)
+}
+
+func (r *repository[M, D]) UpdateOne(ctx context.Context, filters map[string][]any, m M, opts ...*options.UpdateOptions) error {
+	d, err := r.serializer.Serialize(m)
+	if err != nil {
+		return err
+	}
+
+	return r.Repository.UpdateOne(ctx, filters, d, opts...)
+}
+
+func (r *repository[M, D]) UpdateMany(ctx context.Context, filters map[string][]any, mm []M, opts ...*options.UpdateOptions) error {
+	dd := make([]D, len(mm))
+
+	for i, m := range mm {
+		d, err := r.serializer.Serialize(m)
+		if err != nil {
+			return err
+		}
+
+		dd[i] = d
+	}
+
+	return r.Repository.UpdateMany(ctx, filters, dd, opts...)
 }
 
 func (r *repository[M, D]) DeleteOne(ctx context.Context, filters map[string][]any) (M, error) {

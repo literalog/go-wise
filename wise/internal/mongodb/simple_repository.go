@@ -50,13 +50,44 @@ func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any
 	return r.searchMany(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
-func (r *simpleRepository[M]) Upsert(ctx context.Context, id string, m M) error {
-	opt := options.Update().SetUpsert(true)
-	update := bson.M{"$set": m}
-
-	_, err := r.coll.UpdateByID(context.TODO(), id, update, opt)
-
+func (r *simpleRepository[M]) InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error {
+	_, err := r.coll.InsertOne(ctx, m, opts...)
 	return err
+}
+
+func (r *simpleRepository[M]) InsertMany(ctx context.Context, mm []M, opts ...*options.InsertManyOptions) error {
+	iSlice := make([]interface{}, len(mm))
+	for i, d := range mm {
+		iSlice[i] = d
+	}
+
+	_, err := r.coll.InsertMany(ctx, iSlice, opts...)
+	return err
+}
+
+func (r *simpleRepository[M]) UpdateOne(ctx context.Context, filters map[string][]any, m M, opts ...*options.UpdateOptions) error {
+	bsonFields, err := r.indexedFields.toBson(filters)
+	if err != nil {
+		return err
+	}
+	_, err = r.coll.UpdateOne(ctx, bsonFields, bson.M{"$set": m})
+	return err
+}
+
+func (r *simpleRepository[M]) UpdateMany(ctx context.Context, filters map[string][]any, mm []M, opts ...*options.UpdateOptions) error {
+	bsonFields, err := r.indexedFields.toBson(filters)
+	if err != nil {
+		return err
+	}
+
+	for _, m := range mm {
+		_, err = r.coll.UpdateMany(ctx, bsonFields, bson.M{"$set": m}, opts...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *simpleRepository[M]) DeleteOne(ctx context.Context, filters map[string][]any) (M, error) {
