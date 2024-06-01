@@ -50,17 +50,6 @@ func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any
 	return r.searchMany(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
-func (r *simpleRepository[M]) FindById(ctx context.Context, id string) (M, error) {
-	m := new(M)
-
-	err := r.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&m)
-	if err != nil {
-		return *new(M), err
-	}
-
-	return *m, nil
-}
-
 func (r *simpleRepository[M]) Upsert(ctx context.Context, id string, m M) error {
 	opt := options.Update().SetUpsert(true)
 	update := bson.M{"$set": m}
@@ -101,20 +90,6 @@ func (r *simpleRepository[M]) DeleteMany(ctx context.Context, filters map[string
 	}
 
 	return nil
-}
-
-func (r *simpleRepository[M]) DeleteById(ctx context.Context, id string) (M, error) {
-	m, err := r.FindById(ctx, id)
-	if err != nil {
-		return *new(M), err
-	}
-
-	_, err = r.coll.DeleteOne(ctx, bson.M{"_id": id})
-	if err != nil {
-		return *new(M), err
-	}
-
-	return m, nil
 }
 
 func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[string][]any) (int64, error) {
