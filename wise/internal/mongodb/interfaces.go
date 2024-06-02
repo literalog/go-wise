@@ -9,6 +9,7 @@ import (
 type Repository[M any] interface {
 	FindOne(ctx context.Context, filters map[string][]any) (M, error)
 	Find(ctx context.Context, filters map[string][]any, opts ...SearchOptions) ([]M, error)
+	FindById(ctx context.Context, id string) (M, error)
 
 	InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error
 	InsertMany(ctx context.Context, mm []M, opts ...*options.InsertManyOptions) error

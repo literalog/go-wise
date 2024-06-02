@@ -63,6 +63,15 @@ func (r *repository[M, D]) Find(ctx context.Context, filters map[string][]any, o
 	return mm, nil
 }
 
+func (r *repository[M, D]) FindById(ctx context.Context, id string) (M, error) {
+	d, err := r.Repository.FindById(ctx, id)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return r.serializer.Deserialize(d)
+}
+
 func (r *repository[M, D]) InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error {
 	d, err := r.serializer.Serialize(m)
 	if err != nil {

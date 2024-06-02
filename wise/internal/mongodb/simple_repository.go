@@ -50,6 +50,10 @@ func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any
 	return r.searchMany(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
+func (r *simpleRepository[M]) FindById(ctx context.Context, id string) (M, error) {
+	return r.FindOne(ctx, map[string][]any{"_id": {id}})
+}
+
 func (r *simpleRepository[M]) InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error {
 	_, err := r.coll.InsertOne(ctx, m, opts...)
 	return err
