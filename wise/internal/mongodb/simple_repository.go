@@ -9,20 +9,20 @@ import (
 )
 
 type simpleRepository[M any] struct {
-	collection      *mongo.Collection
+	coll            *mongo.Collection
 	indexedFields   indexedFields
 	opts            *repositoryOptions
 	MaxPageSize     int
 	DefaultPageSize int
 }
 
-func NewSimpleRepository[M any](col *mongo.Collection, opts ...RepositoryOptions) (Repository[M], error) {
-	if col == nil {
+func NewSimpleRepository[M any](coll *mongo.Collection, opts ...RepositoryOptions) (Repository[M], error) {
+	if coll == nil {
 		return nil, ErrNilCollection
 	}
 
 	repo := &simpleRepository[M]{
-		collection:    col,
+		coll:          coll,
 		indexedFields: newIndexedFields(*new(M)),
 		opts:          NewRepositoryOptions(opts...),
 	}
@@ -30,26 +30,16 @@ func NewSimpleRepository[M any](col *mongo.Collection, opts ...RepositoryOptions
 	return repo, nil
 }
 
-func (r *simpleRepository[M]) Find(ctx context.Context, id string) (M, error) {
-	m := new(M)
-
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&m)
+func (r *simpleRepository[M]) FindOne(ctx context.Context, filters map[string][]any) (M, error) {
+	bson, err := r.indexedFields.toBson(filters)
 	if err != nil {
 		return *new(M), err
 	}
 
-	return *m, nil
+	return r.searchOne(ctx, bson)
 }
 
-func (r *simpleRepository[M]) FindAll(ctx context.Context) ([]M, error) {
-	return r.search(ctx, bson.M{})
-}
-
-func (r *simpleRepository[M]) FindMany(ctx context.Context, ids []string) ([]M, error) {
-	return r.search(ctx, bson.M{"_id": bson.M{"$in": ids}})
-}
-
-func (r *simpleRepository[M]) Search(ctx context.Context, filters map[string][]any, opts ...SearchOptions) ([]M, error) {
+func (r *simpleRepository[M]) Find(ctx context.Context, filters map[string][]any, opts ...SearchOptions) ([]M, error) {
 	bson, err := r.indexedFields.toBson(filters)
 	if err != nil {
 		return nil, err
@@ -57,36 +47,65 @@ func (r *simpleRepository[M]) Search(ctx context.Context, filters map[string][]a
 
 	opt := NewSearchOptions(opts...)
 
-	return r.search(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
+	return r.searchMany(ctx, bson, opt.ToFindOptions(r.MaxPageSize))
 }
 
-func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[string][]any) (int64, error) {
-	opts := options.Count()
-
-	bson, err := r.indexedFields.toBson(filters)
-	if err != nil {
-		return 0, err
-	}
-
-	return r.collection.CountDocuments(ctx, bson, opts)
+func (r *simpleRepository[M]) FindById(ctx context.Context, id string) (M, error) {
+	return r.FindOne(ctx, map[string][]any{"_id": {id}})
 }
 
-func (r *simpleRepository[M]) Upsert(ctx context.Context, id string, m M) error {
-	opt := options.Update().SetUpsert(true)
-	update := bson.M{"$set": m}
-
-	_, err := r.collection.UpdateByID(context.TODO(), id, update, opt)
-
+func (r *simpleRepository[M]) InsertOne(ctx context.Context, m M, opts ...*options.InsertOneOptions) error {
+	_, err := r.coll.InsertOne(ctx, m, opts...)
 	return err
 }
 
-func (r *simpleRepository[M]) Delete(ctx context.Context, id string) (M, error) {
-	m, err := r.Find(ctx, id)
+func (r *simpleRepository[M]) InsertMany(ctx context.Context, mm []M, opts ...*options.InsertManyOptions) error {
+	iSlice := make([]interface{}, len(mm))
+	for i, d := range mm {
+		iSlice[i] = d
+	}
+
+	_, err := r.coll.InsertMany(ctx, iSlice, opts...)
+	return err
+}
+
+func (r *simpleRepository[M]) UpdateOne(ctx context.Context, filters map[string][]any, m M, opts ...*options.UpdateOptions) error {
+	bsonFields, err := r.indexedFields.toBson(filters)
+	if err != nil {
+		return err
+	}
+	_, err = r.coll.UpdateOne(ctx, bsonFields, bson.M{"$set": m})
+	return err
+}
+
+func (r *simpleRepository[M]) UpdateMany(ctx context.Context, filters map[string][]any, mm []M, opts ...*options.UpdateOptions) error {
+	bsonFields, err := r.indexedFields.toBson(filters)
+	if err != nil {
+		return err
+	}
+
+	for _, m := range mm {
+		_, err = r.coll.UpdateMany(ctx, bsonFields, bson.M{"$set": m}, opts...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *simpleRepository[M]) DeleteOne(ctx context.Context, filters map[string][]any) (M, error) {
+	bson, err := r.indexedFields.toBson(filters)
 	if err != nil {
 		return *new(M), err
 	}
 
-	_, err = r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	m, err := r.searchOne(ctx, bson)
+	if err != nil {
+		return *new(M), err
+	}
+
+	_, err = r.coll.DeleteOne(ctx, bson)
 	if err != nil {
 		return *new(M), err
 	}
@@ -99,7 +118,8 @@ func (r *simpleRepository[M]) DeleteMany(ctx context.Context, filters map[string
 	if err != nil {
 		return err
 	}
-	_, err = r.collection.DeleteMany(ctx, mongoFilters)
+
+	_, err = r.coll.DeleteMany(ctx, mongoFilters)
 	if err != nil {
 		return err
 	}
@@ -107,10 +127,21 @@ func (r *simpleRepository[M]) DeleteMany(ctx context.Context, filters map[string
 	return nil
 }
 
-func (r *simpleRepository[M]) search(ctx context.Context, filters bson.M, opts ...*options.FindOptions) ([]M, error) {
+func (r *simpleRepository[M]) CountDocuments(ctx context.Context, filters map[string][]any) (int64, error) {
+	opts := options.Count()
+
+	bson, err := r.indexedFields.toBson(filters)
+	if err != nil {
+		return 0, err
+	}
+
+	return r.coll.CountDocuments(ctx, bson, opts)
+}
+
+func (r *simpleRepository[M]) searchMany(ctx context.Context, filters bson.M, opts ...*options.FindOptions) ([]M, error) {
 	mm := make([]M, 0)
 
-	cur, err := r.collection.Find(ctx, filters, opts...)
+	cur, err := r.coll.Find(ctx, filters, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,4 +153,15 @@ func (r *simpleRepository[M]) search(ctx context.Context, filters bson.M, opts .
 	}
 
 	return mm, nil
+}
+
+func (r *simpleRepository[M]) searchOne(ctx context.Context, filters bson.M, opts ...*options.FindOneOptions) (M, error) {
+	m := new(M)
+
+	err := r.coll.FindOne(ctx, filters, opts...).Decode(&m)
+	if err != nil {
+		return *new(M), err
+	}
+
+	return *m, nil
 }
